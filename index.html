@@ -1,0 +1,72 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Files - Modern UI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-animation">
+        <div class="gradient-sphere sphere-1"></div>
+        <div class="gradient-sphere sphere-2"></div>
+        <div class="gradient-sphere sphere-3"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h1>File Upload</h1>
+            </div>
+            <p class="subtitle">Tải lên file của bạn một cách nhanh chóng và an toàn</p>
+        </div>
+
+        <div class="upload-card">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <h2>Kéo và thả file vào đây</h2>
+                <p class="upload-text">hoặc</p>
+                <button class="browse-btn" id="browseBtn">
+                    <i class="fas fa-folder-open"></i>
+                    Chọn File
+                </button>
+                <input type="file" id="fileInput" multiple hidden>
+                <p class="file-info">Hỗ trợ: Tất cả các loại file • Tối đa 100MB</p>
+            </div>
+
+            <div class="files-preview" id="filesPreview"></div>
+
+            <div class="upload-progress" id="uploadProgress" style="display: none;">
+                <div class="progress-header">
+                    <span class="progress-text">Đang tải lên...</span>
+                    <span class="progress-percentage" id="progressPercentage">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <button class="upload-btn" id="uploadBtn" style="display: none;">
+                <i class="fas fa-upload"></i>
+                Tải lên tất cả
+            </button>
+        </div>
+
+        <div class="uploaded-files" id="uploadedFiles">
+            <h3>
+                <i class="fas fa-check-circle"></i>
+                File đã tải lên
+            </h3>
+            <div class="uploaded-list" id="uploadedList">
+                <p class="empty-state">Chưa có file nào được tải lên</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
