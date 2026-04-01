@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 
 import Jobs from './pages/Jobs'
 import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
 import EmployerJobs from './pages/EmployerJobs'
 import CreateJob from './pages/CreateJob'
 
@@ -27,6 +28,14 @@ function App() {
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/login" element={<Login />} />
 
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/employer/jobs"
               element={

@@ -41,6 +41,16 @@ export default function Layout({ children }: LayoutProps) {
               {isAuthenticated ? (
                 <>
                   <Link
+                    to="/dashboard"
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      location.pathname === '/dashboard'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
                     to="/employer/jobs"
                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                       location.pathname === '/employer/jobs'

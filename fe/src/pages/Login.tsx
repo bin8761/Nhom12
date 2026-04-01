@@ -25,7 +25,7 @@ export default function Login() {
       })
 
       await new Promise((resolve) => setTimeout(resolve, 100))
-      navigate('/employer/jobs', { replace: true })
+      navigate('/dashboard', { replace: true })
     } catch (err: any) {
       setError(err.response?.data?.message || 'Dang nhap that bai. Vui long thu lai.')
     } finally {
@@ -39,7 +39,7 @@ export default function Login() {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900">Dang nhap</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Dang nhap tai khoan nha tuyen dung de tao tin.
+            Dang nhap tai khoan nha tuyen dung de su dung dashboard.
           </p>
         </div>
 
