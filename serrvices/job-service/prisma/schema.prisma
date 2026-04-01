@@ -1,0 +1,224 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextIndex"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Candidate {
+  id                    String        @id @default(uuid()) @db.Char(36)
+  email                 String?       @db.VarChar(320)
+  phoneNumber           String?       @db.VarChar(32)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  fullName              String?       @db.VarChar(160)
+  preferredProvinceCode String?       @db.VarChar(64)
+  preferredAddressLine  String?       @db.VarChar(255)
+  preferredLocationNote String?       @db.VarChar(255)
+  cvData                String?       @db.LongText
+  applications          Application[]
+  cvs                   CandidateCv[]
+
+  @@index([preferredProvinceCode])
+  @@map("candidates")
+}
+
+model JobDocument {
+  id           String   @id @default(uuid())
+  jobId        String   @unique @db.Char(36)
+  filePath     String   @db.VarChar(255)
+  originalName String   @db.VarChar(255)
+  fileSize     Int
+  mimeType     String   @db.VarChar(64)
+  createdAt    DateTime @default(now())
+  job          job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_documents")
+}
+
+model CandidateCv {
+  id           String            @id @default(uuid())
+  candidateId  String            @map("candidate_id") @db.Char(36)
+  filePath     String            @map("file_path") @db.VarChar(255)
+  fileSize     Int               @map("file_size")
+  mimeType     String            @map("mime_type") @db.VarChar(64)
+  status       CandidateCvStatus @default(PENDING)
+  parsedFields String?           @map("parsed_fields") @db.LongText
+  errorMessage String?           @map("error_message") @db.Text
+  uploadedAt   DateTime          @default(now()) @map("uploaded_at")
+  processedAt  DateTime?         @map("processed_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  candidate    Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId], map: "idx_candidate_cv_candidate_id")
+  @@index([status], map: "idx_candidate_cv_status")
+  @@map("candidate_cv")
+}
+
+model Application {
+  id             String            @id @default(uuid())
+  jobId          String            @db.Char(36)
+  candidateId    String            @db.Char(36)
+  status         ApplicationStatus @default(SUBMITTED)
+  cvFileId       String?
+  coverLetter    String?           @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  cvSnapshot     String?           @map("cv_snapshot") @db.LongText
+  cvStatus       CvReviewStatus    @default(PENDING) @map("cv_status")
+  cvDecisionNote String?           @map("cv_decision_note") @db.Text
+  cvReviewedAt   DateTime?         @map("cv_reviewed_at")
+  candidate      Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job            job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId], map: "idx_applications_job_id")
+  @@index([candidateId], map: "idx_applications_candidate_id")
+  @@index([status], map: "idx_applications_status")
+  @@map("applications")
+}
+
+
+
+model job {
+  id                   String               @id
+  employerId           String               @db.Char(36)
+  title                String               @db.VarChar(160)
+  slug                 String               @db.VarChar(200)
+  description          String               @db.Text
+  skills               String               @db.LongText
+  salary               Decimal              @db.Decimal(15, 2)
+  currency             String               @default("VND") @db.Char(3)
+  location             String               @db.VarChar(160)
+  jobType              job_jobType
+  status               job_status           @default(PENDING)
+  publishedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime
+  deletedAt            DateTime?
+  employerEmail        String?              @db.VarChar(320)
+  experienceLevel      job_experienceLevel?
+  provinceCode         String               @db.VarChar(64)
+  provinceNameSnapshot String               @db.VarChar(160)
+  addressLine          String?              @db.VarChar(255)
+  deletedBy            String?              @db.Char(36)
+  applications         Application[]
+  province             province             @relation(fields: [provinceCode], references: [code], map: "Job_provinceCode_fkey")
+  document             JobDocument?
+  jobapprovallog       jobapprovallog[]
+  jobimage             jobimage[]
+
+  @@unique([employerId, slug], map: "Job_employerId_slug_key")
+  @@index([employerId, status], map: "Job_employerId_status_idx")
+  @@index([jobType], map: "Job_jobType_idx")
+  @@index([location], map: "Job_location_idx")
+  @@index([provinceCode], map: "Job_provinceCode_fkey")
+  @@index([status], map: "Job_status_idx")
+  @@index([status, provinceCode, jobType], map: "Job_status_provinceCode_jobType_idx")
+  @@index([status, updatedAt], map: "Job_status_updatedAt_idx")
+  @@fulltext([title, description], map: "Job_title_description_idx")
+}
+
+model jobapprovallog {
+  id          String                @id
+  jobId       String                @db.Char(36)
+  action      jobapprovallog_action
+  performedBy String?               @db.Char(36)
+  note        String?               @db.Text
+  createdAt   DateTime              @default(now())
+  job         job                   @relation(fields: [jobId], references: [id], onDelete: Cascade, map: "JobApprovalLog_jobId_fkey")
+
+  @@index([jobId, action], map: "JobApprovalLog_jobId_action_idx")
+}
+
+model jobimage {
+  id        String   @id
+  jobId     String   @db.Char(36)
+  filePath  String   @db.VarChar(255)
+  slot      Int      @db.TinyInt
+  createdAt DateTime @default(now())
+  job       job      @relation(fields: [jobId], references: [id], onDelete: Cascade, map: "JobImage_jobId_fkey")
+
+  @@unique([jobId, slot], map: "JobImage_jobId_slot_key")
+}
+
+model province {
+  code          String          @id @db.VarChar(64)
+  name          String          @db.VarChar(160)
+  slug          String          @unique(map: "Province_slug_key") @db.VarChar(160)
+  active        Boolean         @default(true)
+  priority      Int?            @db.SmallInt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  job           job[]
+  provincealias provincealias[]
+}
+
+model provincealias {
+  id              String   @id
+  provinceCode    String   @db.VarChar(64)
+  alias           String   @db.VarChar(160)
+  normalizedAlias String   @db.VarChar(160)
+  createdAt       DateTime @default(now())
+  province        province @relation(fields: [provinceCode], references: [code], onDelete: Cascade, map: "ProvinceAlias_provinceCode_fkey")
+
+  @@unique([provinceCode, alias], map: "ProvinceAlias_provinceCode_alias_key")
+  @@index([normalizedAlias], map: "ProvinceAlias_normalizedAlias_idx")
+}
+
+enum CandidateCvStatus {
+  PENDING
+  PARSING
+  PARSED
+  FAILED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWED
+  INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+enum CvReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum jobapprovallog_action {
+  SUBMITTED
+  AUTO_APPROVED
+  ADMIN_APPROVED
+  REJECTED
+  UPDATED
+  DELETED
+}
+
+enum job_jobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  REMOTE
+}
+
+enum job_status {
+  PENDING
+  APPROVED
+  REJECTED
+  DELETED
+}
+
+enum job_experienceLevel {
+  ENTRY
+  JUNIOR
+  MIDDLE
+  SENIOR
+  LEAD
+}
