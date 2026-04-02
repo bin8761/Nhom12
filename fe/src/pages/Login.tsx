@@ -1,0 +1,98 @@
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import Button from '../components/Button'
+import Input from '../components/Input'
+import { authService } from '../services/authService'
+
+export default function Login() {
+  const navigate = useNavigate()
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  })
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const response = await authService.login({
+        ...formData,
+        deviceId: '', // Will be set by authService
+      })
+      console.log('Login successful:', response)
+      
+      // Wait a bit for Zustand persist to save to localStorage
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Use navigate instead of window.location to avoid full page reload
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) {
+      console.error('Login error:', err)
+      setError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900">Đăng Nhập</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Chưa có tài khoản?{' '}
+            <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
+              Đăng ký ngay
+            </Link>
+          </p>
+        </div>
+
+        <div className="bg-white py-8 px-6 shadow-lg rounded-lg">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <Input
+                label="Email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+            </div>
+
+            <div>
+              <Input
+                label="Mật khẩu"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+              />
+              <div className="text-right mt-1">
+                <Link to="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700">
+                  Quên mật khẩu?
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <Button type="submit" isLoading={isLoading} className="w-full">
+                Đăng Nhập
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
