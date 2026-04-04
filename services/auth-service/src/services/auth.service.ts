@@ -1,24 +1,44 @@
 import { Prisma, UserRole, UserStatus, ApprovalStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { createHash, randomInt, randomUUID } from 'crypto';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import { getPrismaClient } from '../infra/prisma/prismaClient';
 import { loadAppConfig } from '../config/appConfig';
-import { generateAuthTokens } from '../utils/tokenGenerator';
+import { generateAuthTokens, resolvePublicKey } from '../utils/tokenGenerator';
 import {
   getEmailVerificationQueueContext,
+  getPhoneVerificationQueueContext,
 } from '../container/appContext';
 import { publishAuthUserRegisteredEvent } from '../events/authEvents';
+import logger from '../utils/logger';
+import {
+  ConflictError,
+  EmailAlreadyVerifiedError,
+  NotFoundError,
+  InvalidCredentialsError,
+  TokenExpiredError,
+  AccountSuspendedError,
+  EmailNotVerifiedError,
+  TokenRevokedError,
+  DeviceMismatchError,
+  UnauthorizedError,
+} from '../utils/errors';
 import type {
   AuthTokensResponse,
   RegisterRequestInput,
   ResendVerificationRequestInput,
+  ResendPhoneOtpRequestInput,
   VerifyEmailRequestInput,
   VerifyPhoneRequestInput,
-  ResendPhoneOtpRequestInput,
+  LoginRequestInput,
+  LogoutRequestInput,
+  RefreshRequestInput,
+  ForgotPasswordRequestInput,
+  ResetPasswordRequestInput,
+  MeResponse,
 } from '../schemas/authSchemas';
-import { InvalidCredentialsError } from '../utils/errors';
 
-// === REGISTRATION FLOW ONLY ===
+// === REGISTRATION FLOW (Same as develop) ===
 
 function parseDateOfBirth(value: string): Date {
   const [dayStr, monthStr, yearStr] = value.split('/');
@@ -168,20 +188,127 @@ export async function verifyEmail(input: VerifyEmailRequestInput): Promise<void>
   ]);
 }
 
-export async function resendPhoneVerification(
-  input: ResendPhoneOtpRequestInput,
-  context: { userId: string }
-): Promise<void> { /* Not implemented on this branch */ }
+// === LOGIN / AUTH FLOW (New Feature) ===
 
-export async function verifyPhone(
-  input: VerifyPhoneRequestInput,
-  context: { userId: string }
-): Promise<void> { /* Not implemented on this branch */ }
+function verifyRefreshToken(token: string): any {
+  const config = loadAppConfig();
+  const publicKey = resolvePublicKey();
+  if (!publicKey) throw new TokenRevokedError('Key unavailable');
+  try {
+    return jwt.verify(token, publicKey, {
+      algorithms: [config.jwt.algorithm],
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    }) as any;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) throw new TokenExpiredError();
+    throw new TokenRevokedError('Token invalid');
+  }
+}
 
-export async function login() { throw new Error('Not implemented'); }
-export async function logout() { throw new Error('Not implemented'); }
-export async function refresh() { throw new Error('Not implemented'); }
-export async function requestPasswordReset() { throw new Error('Not implemented'); }
-export async function resetPassword() { throw new Error('Not implemented'); }
+export async function login(input: LoginRequestInput, context: { ipAddress?: string | null; userAgent?: string | null } = {}): Promise<AuthTokensResponse> {
+  const prisma = getPrismaClient();
+  const email = normalizeEmail(input.email);
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) {
+    throw new InvalidCredentialsError();
+  }
+
+  if (user.status === UserStatus.SUSPENDED) throw new AccountSuspendedError();
+  if (!user.emailVerified) throw new EmailNotVerifiedError();
+
+  const tokens = generateAuthTokens({
+    userId: user.id,
+    email: user.email,
+    role: mapUserRoleToTokenRole(user.role),
+    deviceId: input.deviceId,
+    emailVerified: user.emailVerified,
+    approvalStatus: user.approvalStatus,
+  });
+
+  await prisma.refreshToken.upsert({
+    where: { userId_deviceId: { userId: user.id, deviceId: input.deviceId } },
+    update: { tokenHash: hashOtp(tokens.refreshToken), expiresAt: tokens.refreshTokenExpiresAt, ipAddress: context.ipAddress, userAgent: context.userAgent, revokedAt: null },
+    create: { userId: user.id, deviceId: input.deviceId, tokenHash: hashOtp(tokens.refreshToken), expiresAt: tokens.refreshTokenExpiresAt, ipAddress: context.ipAddress, userAgent: context.userAgent },
+  });
+
+  return { ...tokens, tokenType: 'Bearer' };
+}
+
+export async function refresh(input: RefreshRequestInput, context: { ipAddress?: string | null; userAgent?: string | null } = {}): Promise<AuthTokensResponse> {
+  const prisma = getPrismaClient();
+  const payload = verifyRefreshToken(input.refreshToken);
+  if (payload.deviceId !== input.deviceId) throw new DeviceMismatchError();
+
+  const record = await prisma.refreshToken.findUnique({ where: { userId_deviceId: { userId: payload.sub, deviceId: input.deviceId } } });
+  if (!record || record.revokedAt || record.expiresAt.getTime() <= Date.now() || record.tokenHash !== hashOtp(input.refreshToken)) {
+    throw new TokenRevokedError();
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  if (!user || user.status === UserStatus.SUSPENDED) throw new TokenRevokedError();
+
+  const tokens = generateAuthTokens({
+    userId: user.id,
+    email: user.email,
+    role: mapUserRoleToTokenRole(user.role),
+    deviceId: input.deviceId,
+    emailVerified: user.emailVerified,
+    approvalStatus: user.approvalStatus,
+  });
+
+  await prisma.refreshToken.update({
+    where: { userId_deviceId: { userId: user.id, deviceId: input.deviceId } },
+    data: { tokenHash: hashOtp(tokens.refreshToken), expiresAt: tokens.refreshTokenExpiresAt, ipAddress: context.ipAddress, userAgent: context.userAgent },
+  });
+
+  return { ...tokens, tokenType: 'Bearer' };
+}
+
+export async function logout(input: LogoutRequestInput, context: { userId?: string } = {}): Promise<void> {
+  if (!context.userId) throw new UnauthorizedError();
+  const prisma = getPrismaClient();
+  await prisma.refreshToken.update({
+    where: { userId_deviceId: { userId: context.userId, deviceId: input.deviceId } },
+    data: { revokedAt: new Date() },
+  });
+}
+
+// === FORGOT / RESET PASSWORD FLOW ===
+
+export async function requestPasswordReset(input: ForgotPasswordRequestInput, context: { locale?: string | null } = {}): Promise<void> {
+  const prisma = getPrismaClient();
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(input.email) } });
+  if (!user) return;
+  const code = String(randomInt(100000, 1000000)).padStart(6, '0');
+  await prisma.passwordResetToken.upsert({
+    where: { userId: user.id },
+    update: { codeHash: hashOtp(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000), consumedAt: null, failedAttempts: 0 },
+    create: { userId: user.id, codeHash: hashOtp(code), expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
+  });
+  const queue = getEmailVerificationQueueContext();
+  await queue.add('password-reset', { userId: user.id, email: user.email, verificationCode: code, locale: context.locale });
+}
+
+export async function resetPassword(input: ResetPasswordRequestInput): Promise<void> {
+  const prisma = getPrismaClient();
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(input.email) }, include: { passwordResetToken: true } });
+  if (!user || !user.passwordResetToken) throw new InvalidCredentialsError();
+  const token = user.passwordResetToken;
+  if (token.consumedAt || token.expiresAt.getTime() <= Date.now() || hashOtp(input.code) !== token.codeHash) {
+    throw new InvalidCredentialsError();
+  }
+  const newHash = await bcrypt.hash(input.newPassword, 12);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } }),
+    prisma.passwordResetToken.update({ where: { userId: user.id }, data: { consumedAt: new Date() } }),
+    prisma.refreshToken.updateMany({ where: { userId: user.id }, data: { revokedAt: new Date() } }),
+  ]);
+}
+
+// === STUBS FOR OTHER FLOWS ===
+export async function verifyPhone() { throw new Error('Not implemented'); }
+export async function resendPhoneVerification() { throw new Error('Not implemented'); }
 export async function getCurrentUserProfile() { throw new Error('Not implemented'); }
 export async function changePassword() { throw new Error('Not implemented'); }
