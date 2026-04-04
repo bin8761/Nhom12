@@ -44,7 +44,7 @@ async function fetchEmployerProfiles(employerIds: string[]): Promise<Map<string,
   try {
     const authApiUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
     const internalSecret = process.env.INTERNAL_SECRET || 'dev-internal-secret';
-
+    
     const response = await fetch(`${authApiUrl}/internal/users/batch`, {
       method: 'POST',
       headers: {
@@ -65,7 +65,7 @@ async function fetchEmployerProfiles(employerIds: string[]): Promise<Map<string,
 
     const result = await response.json();
     const users = result?.data || [];
-
+    
     const employerMap = new Map();
     for (const user of users) {
       if (user.role === 'EMPLOYER' && user.employerProfile) {
@@ -111,7 +111,7 @@ async function sendJobDeletedNotifications(
 ): Promise<void> {
   const emailPromises = applications
     .filter(app => app.candidate?.email)
-    .map(app =>
+    .map(app => 
       sendJobDeletedNotificationEmail({
         to: app.candidate!.email,
         candidateName: app.candidate!.fullName || undefined,
@@ -127,7 +127,7 @@ async function sendJobDeletedNotifications(
     );
 
   await Promise.allSettled(emailPromises);
-
+  
   logger.info({
     event: 'job_deleted_notifications_sent',
     jobTitle,
@@ -281,7 +281,6 @@ async function createJobEntity(
           provinceNameSnapshot: locationSnapshot.provinceName,
           addressLine: payload.addressLine,
           jobType: payload.jobType,
-          experienceLevel: payload.experienceLevel as any,
           status: 'PENDING',
           updatedAt: now,
         },
@@ -386,8 +385,8 @@ export async function createJobWithImages(params: CreateJobParams): Promise<Crea
     return result;
   } catch (error) {
     await Promise.allSettled(
-      filesToCleanup.map((file) =>
-        file.type === 'image'
+      filesToCleanup.map((file) => 
+        file.type === 'image' 
           ? imageStorage.delete(file.jobId, file.relativePath)
           : documentStorage.delete(file.jobId, file.relativePath)
       ),
@@ -599,7 +598,7 @@ export async function updateJobWithImages(params: UpdateJobParams): Promise<Crea
 
       // Handle document
       let documentRecord = existingJob.document;
-
+      
       if (params.removeDocument && existingJob.document) {
         await tx.jobDocument.delete({
           where: { jobId: existingJob.id },
@@ -614,7 +613,7 @@ export async function updateJobWithImages(params: UpdateJobParams): Promise<Crea
             where: { jobId: existingJob.id },
           });
         }
-
+        
         documentRecord = await tx.jobDocument.create({
           data: {
             jobId: existingJob.id,
@@ -655,12 +654,12 @@ export async function updateJobWithImages(params: UpdateJobParams): Promise<Crea
     await Promise.allSettled(
       imagesToRemove.map((image) => imageStorage.delete(existingJob.id, image.filePath)),
     );
-
+    
     // Delete old document if replaced or removed
     if ((params.removeDocument || savedNewDocument) && existingJob.document) {
       await documentStorage.delete(existingJob.id, existingJob.document.filePath);
     }
-
+    
     const redis = getRedisConnection();
     await redis.set(SEARCH_FRESHNESS_KEY, result.job.updatedAt.toISOString()).catch(() => null);
 
@@ -730,9 +729,6 @@ export async function deleteJob(params: DeleteJobParams): Promise<void> {
     });
   });
 
-  // Invalidate public jobs cache
-  await invalidatePublicJobsCache();
-
   // Send email notifications to candidates asynchronously
   if (applicationsToNotify.length > 0) {
     sendJobDeletedNotifications(job.title, applicationsToNotify).catch((error) => {
@@ -778,7 +774,7 @@ export async function restoreJob(params: RestoreJobParams): Promise<job> {
   // Check permission: only the person who deleted can restore
   const isEmployer = job.employerId === params.actorId;
   const isDeleter = job.deletedBy === params.actorId;
-
+  
   if (!isDeleter) {
     if (isEmployer && job.deletedBy !== job.employerId) {
       throw new ValidationError('Only admin who deleted this job can restore it');
@@ -807,9 +803,6 @@ export async function restoreJob(params: RestoreJobParams): Promise<job> {
 
     return updated;
   });
-
-  // Invalidate public jobs cache
-  await invalidatePublicJobsCache();
 
   const queue = getJobApprovalQueueContext();
   await queue.add('job.restored', {
@@ -1027,7 +1020,7 @@ export async function rejectJob(params: RejectJobParams): Promise<job & { employ
 
 export async function listApprovedJobsPublic(params: PublicListJobsParams): Promise<PublicListJobsResult> {
   const { cacheWrapper, generatePaginationKey, deleteCache } = await import('../utils/cache');
-
+  
   const page = Math.max(1, params.page);
   const limit = Math.min(Math.max(1, params.limit), 50);
   const skip = (page - 1) * limit;
