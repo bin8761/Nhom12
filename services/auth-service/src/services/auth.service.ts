@@ -1,7 +1,7 @@
 import { Prisma, UserRole, UserStatus, ApprovalStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { createHash, randomInt, randomUUID } from 'crypto';
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { getPrismaClient } from '../infra/prisma/prismaClient';
 import { loadAppConfig } from '../config/appConfig';
 import { generateAuthTokens, resolvePublicKey } from '../utils/tokenGenerator';
@@ -38,7 +38,7 @@ import type {
   MeResponse,
 } from '../schemas/authSchemas';
 
-// === REGISTRATION FLOW (Same as develop) ===
+// === REGISTRATION FLOW (Common) ===
 
 function parseDateOfBirth(value: string): Date {
   const [dayStr, monthStr, yearStr] = value.split('/');
@@ -188,7 +188,7 @@ export async function verifyEmail(input: VerifyEmailRequestInput): Promise<void>
   ]);
 }
 
-// === LOGIN / AUTH FLOW (New Feature) ===
+// === LOGIN / AUTH FLOW (Common) ===
 
 function verifyRefreshToken(token: string): any {
   const config = loadAppConfig();
@@ -275,7 +275,7 @@ export async function logout(input: LogoutRequestInput, context: { userId?: stri
   });
 }
 
-// === FORGOT / RESET PASSWORD FLOW ===
+// === FORGOT / RESET PASSWORD FLOW (Common) ===
 
 export async function requestPasswordReset(input: ForgotPasswordRequestInput, context: { locale?: string | null } = {}): Promise<void> {
   const prisma = getPrismaClient();
@@ -307,8 +307,48 @@ export async function resetPassword(input: ResetPasswordRequestInput): Promise<v
   ]);
 }
 
+// === PROFILE MANAGEMENT FLOW (New Feature) ===
+
+export async function getCurrentUserProfile(userId: string): Promise<MeResponse> {
+  const prisma = getPrismaClient();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { candidateProfile: true, employerProfile: true },
+  });
+  if (!user) throw new NotFoundError('User not found');
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    status: user.status,
+    approvalStatus: user.approvalStatus,
+    emailVerified: user.emailVerified,
+    phoneVerified: user.phoneVerified,
+    candidateProfile: user.candidateProfile ? { fullName: user.candidateProfile.fullName, phoneNumber: user.candidateProfile.phoneNumber, location: user.candidateProfile.location } : null,
+    employerProfile: user.employerProfile ? { companyName: user.employerProfile.companyName, companyWebsite: user.employerProfile.companyWebsite, headquartersLocation: user.employerProfile.headquartersLocation } : null,
+  };
+}
+
+export async function changePassword(
+  context: { userId?: string },
+  currentPasswordRaw: string,
+  newPasswordRaw: string,
+): Promise<void> {
+  const prisma = getPrismaClient();
+  if (!context.userId) throw new UnauthorizedError();
+  const user = await prisma.user.findUnique({ where: { id: context.userId } });
+  if (!user) throw new NotFoundError('User not found');
+  if (!(await bcrypt.compare(currentPasswordRaw, user.passwordHash))) {
+    throw new InvalidCredentialsError('Mật khẩu hiện tại không chính xác');
+  }
+  const newHash = await bcrypt.hash(newPasswordRaw, 12);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: newHash } }),
+    prisma.refreshToken.updateMany({ where: { userId: user.id }, data: { revokedAt: new Date() } }),
+  ]);
+}
+
 // === STUBS FOR OTHER FLOWS ===
 export async function verifyPhone() { throw new Error('Not implemented'); }
 export async function resendPhoneVerification() { throw new Error('Not implemented'); }
-export async function getCurrentUserProfile() { throw new Error('Not implemented'); }
-export async function changePassword() { throw new Error('Not implemented'); }
