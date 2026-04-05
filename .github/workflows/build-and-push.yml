@@ -34,6 +34,10 @@ jobs:
           username: phuocsang29
           password: ${{ secrets.TOKEN }}
 
+      - name: Sanitize branch name
+        id: sanitize
+        run: echo "tag=$(echo ${GITHUB_REF_NAME} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -41,6 +45,6 @@ jobs:
           file: ${{ matrix.svc.dockerfile }}
           push: true
           tags: |
-            phuocsang29/${{ matrix.svc.name }}:${{ github.ref_name }}
+            phuocsang29/${{ matrix.svc.name }}:${{ steps.sanitize.outputs.tag }}
             phuocsang29/${{ matrix.svc.name }}:${{ github.sha }}
             ${{ (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'develop') && format('phuocsang29/{0}:latest', matrix.svc.name) || '' }}
