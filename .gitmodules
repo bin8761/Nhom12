@@ -1,0 +1,4 @@
+[submodule "services/auth-service"]
+	path = services/auth-service
+	url = https://github.com/bin8761/Nhom12
+	branch = develop
