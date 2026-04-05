@@ -15,7 +15,7 @@ RUN npm install
 COPY . .
 
 # Generate Prisma client
-RUN npm run prisma:generate
+RUN npx prisma generate
 
 # Build
 RUN npm run build
