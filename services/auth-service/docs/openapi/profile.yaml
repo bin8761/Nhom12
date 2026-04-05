@@ -1,0 +1,417 @@
+openapi: 3.0.3
+info:
+  title: Auth Service - Profile APIs
+  version: 1.0.0
+  description: |
+    REST endpoints for managing candidate and employer profiles exposed by the Auth Service.
+    All endpoints require JWT bearer authentication.
+tags:
+  - name: Profile
+    description: Candidate/Employer profile endpoints
+servers:
+  - url: https://api.example.com
+paths:
+  /api/users/me/profile:
+    get:
+      tags: [Profile]
+      summary: Get the authenticated user's profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile details for the current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponseEnvelope'
+              examples:
+                candidate:
+                  summary: Candidate profile
+                  value:
+                    data:
+                      role: CANDIDATE
+                      profile:
+                        fullName: Jane Doe
+                        phoneNumber: '+84901234567'
+                        location: 'Ho Chi Minh City'
+                        headline: 'Frontend Engineer'
+                        summary: '5 years building mobile apps'
+                        skills: ['React', 'TypeScript']
+                        yearsExperience: 5
+                        portfolioUrl: 'https://janedoe.dev'
+                        cvUrl: 'files/cv/jane-doe.pdf'
+                        preferredJobTypes: ['FULL_TIME']
+                        updatedAt: '2025-10-09T08:15:30.000Z'
+                employer:
+                  summary: Employer profile
+                  value:
+                    data:
+                      role: EMPLOYER
+                      profile:
+                        companyName: 'Acme Inc'
+                        companyWebsite: 'https://acme.example.com'
+                        industry: 'Technology'
+                        companySize: 'SMALL'
+                        headquartersLocation: 'Hanoi'
+                        companyDescription: 'We build awesome products'
+                        contactEmail: 'hr@acme.example.com'
+                        contactPhone: '+84901112223'
+                        updatedAt: '2025-10-09T08:15:30.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProfileNotFound'
+    put:
+      tags: [Profile]
+      summary: Update the authenticated user's profile
+      description: |
+        Updates the profile of the currently authenticated user. The request body shape depends on the user's role.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CandidateProfileUpdateRequest'
+                - $ref: '#/components/schemas/EmployerProfileUpdateRequest'
+              discriminator:
+                propertyName: role
+                mapping:
+                  CANDIDATE: '#/components/schemas/CandidateProfileUpdateRequest'
+                  EMPLOYER: '#/components/schemas/EmployerProfileUpdateRequest'
+      responses:
+        '200':
+          description: Profile update result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateResponseEnvelope'
+              examples:
+                candidate:
+                  summary: Candidate update result
+                  value:
+                    data:
+                      profile:
+                        fullName: 'Jane Doe'
+                        phoneNumber: '+84901234567'
+                        location: 'Ho Chi Minh City'
+                        headline: 'Frontend Engineer'
+                        summary: '5 years building mobile apps'
+                        skills: ['React', 'TypeScript']
+                        yearsExperience: 5
+                        portfolioUrl: 'https://janedoe.dev'
+                        cvUrl: 'files/cv/jane-doe.pdf'
+                        preferredJobTypes: ['FULL_TIME']
+                        updatedAt: '2025-10-09T08:20:00.000Z'
+                      changedFields: ['fullName', 'skills']
+                      updatedAt: '2025-10-09T08:20:00.000Z'
+                employer:
+                  summary: Employer update result
+                  value:
+                    data:
+                      profile:
+                        companyName: 'Acme Inc'
+                        companyWebsite: 'https://acme.example.com'
+                        industry: 'Technology'
+                        companySize: 'SMALL'
+                        headquartersLocation: 'Hanoi'
+                        companyDescription: 'Updated description'
+                        contactEmail: 'hr@acme.example.com'
+                        contactPhone: '+84901112223'
+                        updatedAt: '2025-10-09T08:20:00.000Z'
+                      changedFields: ['companyDescription']
+                      updatedAt: '2025-10-09T08:20:00.000Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ProfileNotFound'
+  /api/admin/users/{userId}/profile:
+    get:
+      tags: [Profile]
+      summary: Get profile for a specific user (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: User identifier
+      responses:
+        '200':
+          description: Profile details for the requested user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ProfileNotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated user lacks required permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ProfileNotFound:
+      description: Profile not found for the given user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: ERR_UNAUTHORIZED
+        message:
+          type: string
+      required: [code, message]
+    ValidationErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  message:
+                    type: string
+    CandidateProfileUpdateRequest:
+      type: object
+      description: Payload used by candidates to update their profile
+      properties:
+        role:
+          type: string
+          enum: [CANDIDATE]
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        phoneNumber:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        headline:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        skills:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        yearsExperience:
+          type: integer
+          minimum: 0
+          nullable: true
+        portfolioUrl:
+          type: string
+          format: uri
+          nullable: true
+        cvUrl:
+          type: string
+          nullable: true
+          description: Relative path to a PDF stored in the local file service
+        preferredJobTypes:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+      required:
+        - role
+        - fullName
+    EmployerProfileUpdateRequest:
+      type: object
+      description: Payload used by employers to update their profile
+      properties:
+        role:
+          type: string
+          enum: [EMPLOYER]
+        companyName:
+          type: string
+          minLength: 1
+          maxLength: 160
+        companyWebsite:
+          type: string
+          format: uri
+          nullable: true
+        industry:
+          type: string
+          minLength: 1
+          maxLength: 120
+        companySize:
+          type: string
+          nullable: true
+          enum: [MICRO, SMALL, MEDIUM, LARGE, ENTERPRISE]
+        headquartersLocation:
+          type: string
+          minLength: 1
+          maxLength: 160
+        companyDescription:
+          type: string
+          nullable: true
+        contactEmail:
+          type: string
+          format: email
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+      required:
+        - role
+        - companyName
+        - industry
+        - headquartersLocation
+    CandidateProfile:
+      type: object
+      properties:
+        fullName:
+          type: string
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        headline:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        skills:
+          type: array
+          items:
+            type: string
+        yearsExperience:
+          type: integer
+          nullable: true
+        portfolioUrl:
+          type: string
+          nullable: true
+        cvUrl:
+          type: string
+          nullable: true
+        preferredJobTypes:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - skills
+        - preferredJobTypes
+    EmployerProfile:
+      type: object
+      properties:
+        companyName:
+          type: string
+          nullable: true
+        companyWebsite:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        companySize:
+          type: string
+          nullable: true
+          enum: [MICRO, SMALL, MEDIUM, LARGE, ENTERPRISE]
+        headquartersLocation:
+          type: string
+          nullable: true
+        companyDescription:
+          type: string
+          nullable: true
+        contactEmail:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    ProfileResponseEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            role:
+              type: string
+              enum: [CANDIDATE, EMPLOYER]
+            profile:
+              oneOf:
+                - $ref: '#/components/schemas/CandidateProfile'
+                - $ref: '#/components/schemas/EmployerProfile'
+              discriminator:
+                propertyName: role
+          required: [role, profile]
+      required: [data]
+    ProfileUpdateResponseEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            profile:
+              oneOf:
+                - $ref: '#/components/schemas/CandidateProfile'
+                - $ref: '#/components/schemas/EmployerProfile'
+            changedFields:
+              type: array
+              items:
+                type: string
+            updatedAt:
+              type: string
+              format: date-time
+              nullable: true
+          required: [profile, changedFields, updatedAt]
+      required: [data]
