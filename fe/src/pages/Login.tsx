@@ -6,7 +6,10 @@ import { authService } from '../services/authService'
 
 export default function Login() {
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({ email: '', password: '' })
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -16,14 +19,19 @@ export default function Login() {
     setIsLoading(true)
 
     try {
-      await authService.login({
+      const response = await authService.login({
         ...formData,
-        deviceId: '',
+        deviceId: '', // Will be set by authService
       })
-
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      navigate('/employer/jobs', { replace: true })
+      console.log('Login successful:', response)
+      
+      // Wait a bit for Zustand persist to save to localStorage
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Use navigate instead of window.location to avoid full page reload
+      navigate('/dashboard', { replace: true })
     } catch (err: any) {
+      console.error('Login error:', err)
       setError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
     } finally {
       setIsLoading(false)
@@ -55,7 +63,6 @@ export default function Login() {
               <Input
                 label="Email"
                 type="email"
-                placeholder="your.email@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -66,7 +73,6 @@ export default function Login() {
               <Input
                 label="Mật khẩu"
                 type="password"
-                placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
@@ -89,3 +95,4 @@ export default function Login() {
     </div>
   )
 }
+
