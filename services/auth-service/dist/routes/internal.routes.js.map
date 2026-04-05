@@ -1,0 +1,1 @@
+{"version":3,"file":"internal.routes.js","sourceRoot":"","sources":["../../src/routes/internal.routes.ts"],"names":[],"mappings":";;AAAA,qCAAiC;AACjC,8EAA2E;AAC3E,4EAA8F;AAE9F,MAAM,cAAc,GAAG,IAAA,gBAAM,GAAE,CAAC;AAEhC,cAAc,CAAC,GAAG,CAAC,gBAAgB,EAAE,2CAAoB,EAAE,wCAAkB,CAAC,CAAC;AAC/E,cAAc,CAAC,IAAI,CAAC,cAAc,EAAE,2CAAoB,EAAE,0CAAoB,CAAC,CAAC;AAEhF,kBAAe,cAAc,CAAC"}

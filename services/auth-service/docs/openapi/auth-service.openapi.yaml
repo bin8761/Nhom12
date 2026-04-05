@@ -1,0 +1,615 @@
+openapi: 3.1.0
+info:
+  title: Auth Service API
+  version: 0.1.0
+  description: >-
+    Draft specification for Job Finder Auth service endpoints. Subject to change as
+    implementation progresses.
+servers:
+  - url: https://api.job-finder.local/api/v1
+    description: Local development gateway
+  - url: https://api.job-finder.com/api/v1
+    description: Production gateway (placeholder)
+tags:
+  - name: Auth
+    description: Authentication and session management endpoints
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account
+      description: >
+        Creates a user, issues access/refresh tokens, and schedules a verification email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokensResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/ConflictEmailError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokensResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/InvalidCredentialsError"
+        "403":
+          $ref: "#/components/responses/EmailNotVerifiedError"
+        "423":
+          $ref: "#/components/responses/AccountSuspendedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token and issue new tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokensResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/TokenRevokedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke refresh token for current device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Session revoked
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend verification code email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerificationRequest"
+      responses:
+        "202":
+          description: Verification email scheduled
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/UserNotFoundError"
+        "409":
+          $ref: "#/components/responses/AlreadyVerifiedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Verify email with OTP code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+      responses:
+        "200":
+          description: Email verified successfully
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/UserNotFoundError"
+        "409":
+          $ref: "#/components/responses/AlreadyVerifiedError"
+        "410":
+          description: Verification code expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Invalid verification code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/verify-phone:
+    post:
+      tags: [Auth]
+      summary: Verify phone number with OTP code
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPhoneRequest"
+      responses:
+        "200":
+          description: Phone number verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [message]
+                    properties:
+                      message:
+                        type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/UserNotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/resend-phone-otp:
+    post:
+      tags: [Auth]
+      summary: Resend phone verification OTP
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendPhoneOtpRequest"
+      responses:
+        "202":
+          description: Phone verification OTP scheduled for sending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [message]
+                    properties:
+                      message:
+                        type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/UserNotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password for authenticated user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Password updated
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset OTP via email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "202":
+          description: Reset OTP sent (if account exists)
+          headers:
+            Retry-After:
+              schema:
+                type: string
+              description: Present when rate limit is hit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Password reset code sent if the email exists
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Password reset successful
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/UserNotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Authenticated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        [email, password, role, fullName, dateOfBirth, address, phoneNumber]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+          description: Must contain at least one letter and one number.
+        role:
+          type: string
+          enum: [candidate, employer]
+        deviceId:
+          type: string
+          description: Optional device identifier used for refresh token binding.
+        fullName:
+          type: string
+          maxLength: 120
+        dateOfBirth:
+          type: string
+          pattern: "^\\d{2}/\\d{2}/\\d{4}$"
+          description: Date of birth in dd/MM/yyyy format. Must represent an adult (18+).
+        address:
+          type: string
+          maxLength: 255
+        phoneNumber:
+          type: string
+          description: Valid Vietnamese phone number (0xxxxxxxxx or +84xxxxxxxxx).
+    LoginRequest:
+      type: object
+      required: [email, password, deviceId]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        deviceId:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refreshToken, deviceId]
+      properties:
+        refreshToken:
+          type: string
+        deviceId:
+          type: string
+    LogoutRequest:
+      type: object
+      required: [deviceId]
+      properties:
+        deviceId:
+          type: string
+    ResendVerificationRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    VerifyEmailRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+    VerifyPhoneRequest:
+      type: object
+      required: [phoneNumber, code]
+      properties:
+        phoneNumber:
+          type: string
+          description: Phone number that received the OTP.
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+    ResendPhoneOtpRequest:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 10
+          description: Must contain at least one letter and one number.
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required: [email, code, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+        newPassword:
+          type: string
+          minLength: 10
+          description: Must contain at least one letter and one number.
+          description: Phone number that should receive a new OTP.
+    AuthTokensResponse:
+      type: object
+      required:
+        [accessToken, refreshToken, tokenType, expiresIn, refreshTokenExpiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Access token TTL in seconds.
+        refreshTokenExpiresIn:
+          type: integer
+          description: Refresh token TTL in seconds.
+        phoneVerificationRequired:
+          type: boolean
+          description: Indicates whether the user must verify their phone number to unlock full functionality.
+    MeResponse:
+      type: object
+      required: [id, email, role, emailVerified, fullName, dateOfBirth, address, phoneNumber, phoneVerified]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [candidate, employer, admin]
+        emailVerified:
+          type: boolean
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+          pattern: "^\\d{2}/\\d{2}/\\d{4}$"
+        address:
+          type: string
+        phoneNumber:
+          type: string
+        phoneVerified:
+          type: boolean
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: ERR_VALIDATION
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+          nullable: true
+  responses:
+    ValidationError:
+      description: Request payload validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ConflictEmailError:
+      description: Email already registered.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InvalidCredentialsError:
+      description: Email or password is incorrect.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AccountSuspendedError:
+      description: Account is suspended and cannot login.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    EmailNotVerifiedError:
+      description: Account email is not verified.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimitError:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          schema:
+            type: string
+          description: Seconds until rate limit resets.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnauthorizedError:
+      description: Missing or invalid auth token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TokenRevokedError:
+      description: Refresh token revoked or expired.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UserNotFoundError:
+      description: User not found for provided email.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AlreadyVerifiedError:
+      description: Email already verified.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Unexpected internal error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+x-generated-at: "2025-10-07T16:10:00Z"
